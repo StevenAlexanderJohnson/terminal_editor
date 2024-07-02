@@ -65,16 +65,13 @@ fn main() -> std::io::Result<()> {
                             cursor.set_editing(false);
                         }
                         event::KeyCode::Backspace => {
-                            cursor.move_left(1);
-                            cursor.write_text(" ");
-                            cursor.move_left(1);
+                            cursor.delete_char();
                         }
                         event::KeyCode::Enter => {
-                            cursor.write_text("\n");
-                            cursor.next_line();
+                            cursor.write_char('\n');
                         }
                         event::KeyCode::Char(c) => {
-                            cursor.write_text(&c.to_string());
+                            cursor.write_char(c);
                         }
                         _ => (),
                     }

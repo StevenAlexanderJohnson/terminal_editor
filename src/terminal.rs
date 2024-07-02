@@ -3,6 +3,7 @@ use std::io::Write;
 use crossterm::{
     cursor::{MoveTo, SetCursorStyle},
     execute,
+    terminal::{Clear, ClearType},
 };
 pub struct TerminalCursor<W: Write> {
     content: Vec<String>,
@@ -23,9 +24,10 @@ impl<W: Write> TerminalCursor<W> {
 
     fn write_content(&mut self) {
         let initial_position = self.position;
-        self.position.0 = 0;
-        self.position.1 = 0;
+        self.position = (0, 0);
+        self.set_position(0, 0);
         let content = self.content.clone();
+        execute!(self.terminal, Clear(ClearType::All)).unwrap();
         for line in &content {
             write!(self.terminal, "{}", line).unwrap();
             self.position.1 += 1;
@@ -82,22 +84,42 @@ impl<W: Write> TerminalCursor<W> {
         self.update_position();
     }
 
-    pub fn write_text(&mut self, text: &str) {
-        for c in text.chars() {
-            self.content[self.position.1 as usize].insert(self.position.0 as usize, c);
-            self.position.0 += 1 as u16;
+    pub fn write_char(&mut self, letter: char) {
+        match letter {
+            '\n' => {
+                // Split the current line into two lines at the cursor
+                let content = self.content.clone();
+                let (left, right) =
+                    content[self.position.1 as usize].split_at(self.position.0 as usize);
+                self.content[self.position.1 as usize] = left.to_string();
+                self.content
+                    .insert(self.position.1 as usize + 1, right.to_string());
+                self.position = (0, self.position.1 + 1);
+            }
+            _ => {
+                self.content[self.position.1 as usize].insert(self.position.0 as usize, letter);
+                self.position.0 += 1;
+            }
         }
-        let x_position = self.position.0;
-    
-        self.position.0 = 0;
-        let content = self.content.clone();
-        for c in content[self.position.1 as usize].chars() {
-            write!(self.terminal, "{}", c).unwrap();
-            self.position.0 += 1 as u16;
-            self.update_position();
+        self.write_content();
+    }
+
+    pub fn delete_char(&mut self) {
+        // if the cursor is at the beginning of the line, join the current line with the previous line
+        // unless it's the first line, then do nothing
+        if self.position.0 == 0 {
+            if self.position.1 == 0 {
+                return;
+            }
+            let current_line = self.content.remove(self.position.1 as usize);
+            self.position.1 -= 1;
+            self.position.0 = self.content[self.position.1 as usize].len() as u16;
+            self.content[self.position.1 as usize] += &current_line;
+        } else {
+            self.content[self.position.1 as usize].remove(self.position.0 as usize - 1);
+            self.position.0 -= 1;
         }
-    
-        self.position.0 = x_position;
+        self.write_content();
     }
 
     pub fn set_position(&mut self, x: u16, y: u16) {
@@ -112,13 +134,6 @@ impl<W: Write> TerminalCursor<W> {
             execute!(self.terminal, SetCursorStyle::SteadyBlock).unwrap();
         }
         self.editing = editing;
-    }
-
-    pub fn next_line(&mut self) {
-        self.position.0 = 0;
-        self.content.insert(self.position.1 as usize, String::from(""));
-        self.position.1 += 1;
-        self.update_position();
     }
 
     pub fn update_position(&mut self) {
@@ -182,37 +197,5 @@ mod tests {
         cursor.initialize();
         cursor.move_down(1);
         assert_eq!(cursor.position, (0, 1));
-    }
-
-    #[test]
-    fn test_write_text() {
-        let content = create_content();
-        let out = Cursor::new(vec![]);
-        let mut cursor = super::TerminalCursor::new(out, content);
-        cursor.initialize();
-        cursor.write_text("a");
-        assert_eq!(cursor.content[0], "aHello, World!");
-    }
-
-    #[test]
-    fn test_write_text_new_line() {
-        let content = create_content();
-        let out = Cursor::new(vec![]);
-        let mut cursor = super::TerminalCursor::new(out, content);
-        cursor.initialize();
-        cursor.write_text("a\n");
-        assert_eq!(cursor.content[0], "a");
-        assert_eq!(cursor.content[1], "Hello, World!");
-    }
-
-    #[test]
-    fn test_write_text_new_line_middle() {
-        let content = create_content();
-        let out = Cursor::new(vec![]);
-        let mut cursor = super::TerminalCursor::new(out, content);
-        cursor.initialize();
-        cursor.write_text("This is a simple text\nwith a new line");
-        assert_eq!(cursor.content[1], "This is a simple text");
-        assert_eq!(cursor.content[2], "with a new lineHello, World!");
     }
 }
