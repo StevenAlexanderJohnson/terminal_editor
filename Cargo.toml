@@ -1,0 +1,10 @@
+[package]
+name = "terminal_editor"
+version = "0.1.0"
+edition = "2021"
+
+[env]
+RUST_BACKTRACE=1
+
+[dependencies]
+crossterm = "0.27.0"
